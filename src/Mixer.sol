@@ -61,13 +61,14 @@ contract Mixer is IncrementalMerkleTree {
         if (s_nullifierHashes[_nullifierHash]) {
             revert Mixer__NullifierAlreadyUsed(_nullifierHash);
         }
-
-        // check whether the proof is valid by calling  the verifier contract
+        // prepare the public inputs for the verifier
         bytes32[] memory publicInputs = new bytes32[](3);
         publicInputs[0] = _root;
         publicInputs[1] = _nullifierHash;
         publicInputs[2] = bytes32(uint256(uint160(address(_recipient))));
-        if (!i_verifier.verify(_proof, publicInputs)) {
+
+        // check whether the proof is valid by calling  the verifier contract
+        if (!i_verifier.verify(_proof, publicInputs )) {
             revert Mixer__InvalidProof();
         }
 
@@ -80,5 +81,6 @@ contract Mixer is IncrementalMerkleTree {
         }
 
         emit Withdrawal(_recipient, _nullifierHash);
+       
     }
 }
