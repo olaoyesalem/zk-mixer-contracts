@@ -33,7 +33,7 @@ contract IncrementalMerkleTree{
         s_root = zeros(_depth); // 0 root..
      }
 
-    function _insert(bytes32 _leaf) internal {
+    function _insert(bytes32 _leaf) internal  returns (uint32 ) {
         
         // insert the commitment into the merkle tree
         uint32 _nextLeafIndex = s_nextLeafIndex; 
@@ -68,6 +68,11 @@ contract IncrementalMerkleTree{
             }
             bytes32 currentHash=Field.toBytes32(i_hasher.hash_2(Field.toField(left),Field.toField(right)));
             currentIndex = currentIndex/2;
+            s_root = currentHash;
+
+            // increment the next leaf index    
+            s_nextLeafIndex = _nextLeafIndex + 1;
+            return _nextLeafIndex;
         }
     }
 
