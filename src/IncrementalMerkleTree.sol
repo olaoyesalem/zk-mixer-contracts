@@ -1,6 +1,7 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
-import {Poseidon2,Field} from "@poseidon/src/Poseidon2.sol";
+import {Poseidon2_BN254} from "@poseidon/src/bn254/solidity/Poseidon2.sol";
+import {Field} from "@poseidon/src/bn254/solidity/Field.sol";
 
 
 contract IncrementalMerkleTree{
@@ -13,10 +14,10 @@ contract IncrementalMerkleTree{
      uint32 public immutable i_depth;
      uint32 public s_nextLeafIndex;
     bytes32 public s_root;
-    Poseidon2 public immutable i_hasher;
+    Poseidon2_BN254 public immutable i_hasher;
          mapping (uint32 => bytes32) public s_cachedSubtrees;
 
-     constructor (uint32 _depth, Poseidon2 _hasher ) {
+     constructor (uint32 _depth, Poseidon2_BN254 _hasher ) {
         if (_depth == 0) {
             revert IncrementalMerkleTree__DepthShouldBeGreaterThanZero();
         }
@@ -34,23 +35,24 @@ contract IncrementalMerkleTree{
      }
 
     function _insert(bytes32 _leaf) internal  returns (uint32 ) {
-        
+
         // insert the commitment into the merkle tree
-        uint32 _nextLeafIndex = s_nextLeafIndex; 
+        uint32 _nextLeafIndex = s_nextLeafIndex;
         if(_nextLeafIndex == 2 ** i_depth ){
             revert IncrementalMerkleTree_MerkleTreeFull(_nextLeafIndex);
         }
         // check that the index of the leaf being added is within maximum index
         // figure out if the index is even..
-        // even if we need to put it on the left of the hash and a zero.. tree on the right 
+        // even if we need to put it on the left of the hash and a zero.. tree on the right
         // need to store the  the result as a cached subtree
         // - if odd,  we need the leaf to be on the right and a cached subtree on the left
-   
+
+        uint32 currentIndex = _nextLeafIndex;
+        bytes32 currentHash = _leaf;
+        bytes32 left;
+        bytes32 right;
+
         for (uint32 i = 0; i< i_depth; i++){
-            uint32   currentIndex  = _nextLeafIndex;
-            bytes32 currentHash = _leaf;
-            bytes32 left;
-            bytes32 right;
             if (currentIndex %2 == 0){
                 // if even , we need to put it on the left of the hash and a zerotree
                 // on the right and store the result  as a cached subtree
@@ -60,20 +62,20 @@ contract IncrementalMerkleTree{
                 s_cachedSubtrees[i] = currentHash;
 
             }else {
-                // if odd we need the leaf to be on the right and a cached subtree 
+                // if odd we need the leaf to be on the right and a cached subtree
                 // on the left..
                 left = s_cachedSubtrees[i];
                 right = currentHash;
 
             }
-            bytes32 currentHash=Field.toBytes32(i_hasher.hash_2(Field.toField(left),Field.toField(right)));
+            currentHash = Field.toBytes32(i_hasher.hash_2(Field.toField(left),Field.toField(right)));
             currentIndex = currentIndex/2;
-            s_root = currentHash;
-
-            // increment the next leaf index    
-            s_nextLeafIndex = _nextLeafIndex + 1;
-            return _nextLeafIndex;
         }
+
+        s_root = currentHash;
+        // increment the next leaf index
+        s_nextLeafIndex = _nextLeafIndex + 1;
+        return _nextLeafIndex;
     }
 
 

@@ -3,11 +3,11 @@ pragma solidity ^0.8.24;
 
 
 import {IVerifier} from "./Verifier.sol";
-import {IncrementalMerkleTree, Poseidon2} from "./IncrementalMerkleTree.sol";
+import {IncrementalMerkleTree, Poseidon2_BN254} from "./IncrementalMerkleTree.sol";
 
 
 contract Mixer is IncrementalMerkleTree {
-    Iverifier public immutable i_verifier;
+    IVerifier public immutable i_verifier;
     mapping(bytes32 => bool) public s_commitments;
     mapping (bytes32 => bool) public s_nullifierHashes;
 
@@ -19,9 +19,14 @@ contract Mixer is IncrementalMerkleTree {
     );
     error Mixer__UnknownRoot(bytes32 _root);
     error Mixer__CommitmentAlreadyAdded(bytes32 _commitment);
-    error Mixer__Mixer__NullifierAlreadyUsed(bytes32 _nullifierHash);
+    error Mixer__NullifierAlreadyUsed(bytes32 _nullifierHash);
+    error Mixer__InvalidProof();
+    error Mixer__PaymentFailed(address _recipient, uint256 _amount);
 
-    constructor(Iverifier _verifier,uint32 _merkleTreeDepth,Poseidon2 _hasher)IncremenalMerkleTree(_merkleTreeDepth, _hasher) {
+    event Deposit(bytes32 indexed commitment, uint32 insertedIndex, uint256 timestamp);
+    event Withdrawal(address indexed recipient, bytes32 nullifierHash);
+
+    constructor(IVerifier _verifier, uint32 _merkleTreeDepth, Poseidon2_BN254 _hasher) IncrementalMerkleTree(_merkleTreeDepth, _hasher) {
         // initialize the contract
         i_verifier = _verifier;
     }
@@ -38,28 +43,42 @@ contract Mixer is IncrementalMerkleTree {
             revert Mixer__DepositAmountNotCorrect(msg.value, DENOMINATION);
         }
 
-        
         // add the commitment to the onchain..  incremenatal  merkle tree
-        uint32 insertedIndex = insert(_commitment);
+        uint32 insertedIndex = _insert(_commitment);
         s_commitments[_commitment] = true;
 
-        emit Deposit(_commitment,insertedIndex, block.timestamp);
+        emit Deposit(_commitment, insertedIndex, block.timestamp);
     }
 
     /// @notice Withdraw funds from the mixer in a private way.. we cant use the commitment because it will defeat the privacy purpose
     /// @param _proof the zk proof generated off-chain that proves the user has a valid commitment in the list of commitments
-    function withdraw(bytes memory _proof, bytes32 _root, bytes32 _nullifierHash) external {
+    function withdraw(bytes memory _proof, bytes32 _root, bytes32 _nullifierHash, address payable _recipient) external {
         // check that  the root  that was used in the proof generation  matches the root on-chain
-        if (_root != s_root){
+        if (_root != s_root) {
             revert Mixer__UnknownRoot(_root);
         }
-        // check whether the proof is valid by calling  the verifier contract
         // check whether the nullifier has not yet been used...
-        if (s_nullifierHashes[_nullifierHash]){
+        if (s_nullifierHashes[_nullifierHash]) {
             revert Mixer__NullifierAlreadyUsed(_nullifierHash);
         }
 
+        // check whether the proof is valid by calling  the verifier contract
+        bytes32[] memory publicInputs = new bytes32[](3);
+        publicInputs[0] = _root;
+        publicInputs[1] = _nullifierHash;
+        publicInputs[2] = bytes32(uint256(uint160(address(_recipient))));
+        if (!i_verifier.verify(_proof, publicInputs)) {
+            revert Mixer__InvalidProof();
+        }
+
         s_nullifierHashes[_nullifierHash] = true;
-        //send them the funds
+
+        // send them the funds
+        (bool success, ) = _recipient.call{value: DENOMINATION}("");
+        if (!success) {
+            revert Mixer__PaymentFailed(_recipient, DENOMINATION);
+        }
+
+        emit Withdrawal(_recipient, _nullifierHash);
     }
 }
