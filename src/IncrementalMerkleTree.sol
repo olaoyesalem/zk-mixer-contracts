@@ -13,7 +13,13 @@ contract IncrementalMerkleTree{
 
      uint32 public immutable i_depth;
      uint32 public s_nextLeafIndex;
-    bytes32 public s_root;
+    uint32 public s_currentRootIndex;
+
+     uint32 public constant ROOT_HISTORY_SIZE = 30;
+
+
+
+    mapping(uint256 => bytes32) public s_roots;
     Poseidon2_BN254 public immutable i_hasher;
          mapping (uint32 => bytes32) public s_cachedSubtrees;
 
@@ -31,7 +37,7 @@ contract IncrementalMerkleTree{
         // initlaize the treess with zero values
         // store the initial root in storage 
 
-        s_root = zeros(_depth); // 0 root..
+        s_roots[0] = zeros(_depth); // store the ID 0 root  as the zero depth 
      }
 
     function _insert(bytes32 _leaf) internal  returns (uint32 ) {
@@ -72,12 +78,40 @@ contract IncrementalMerkleTree{
             currentIndex = currentIndex/2;
         }
 
-        s_root = currentHash;
+        uint32 newRootIndex =  (s_currentRootIndex + 1)% ROOT_HISTORY_SIZE;
+        s_currentRootIndex = newRootIndex;  
+        s_roots[newRootIndex] = currentHash;
         // increment the next leaf index
         s_nextLeafIndex = _nextLeafIndex + 1;
         return _nextLeafIndex;
     }
 
+
+    function isKnownRoot(bytes32 _root) public returns (bool) {
+        //check if the roots matches the one in the s_roots 
+
+        if (_root == 0) {
+            return false;
+        }
+
+        uint32 _currentRootIndex = s_currentRootIndex;
+        uint32 i = _currentRootIndex;
+
+        do{
+            if (s_roots[i] == _root){
+                return true;
+            }
+            if (i == 0){
+                i = ROOT_HISTORY_SIZE;
+            }   
+            i--;
+
+        }while( i != _currentRootIndex); 
+        return false;
+       
+        
+        
+    }
 
 // NOTE: change when you know the hash function to use
     /// @notice Returns the root of a subtree at the given depth

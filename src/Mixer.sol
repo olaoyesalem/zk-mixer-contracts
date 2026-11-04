@@ -54,7 +54,7 @@ contract Mixer is IncrementalMerkleTree {
     /// @param _proof the zk proof generated off-chain that proves the user has a valid commitment in the list of commitments
     function withdraw(bytes memory _proof, bytes32 _root, bytes32 _nullifierHash, address payable _recipient) external {
         // check that  the root  that was used in the proof generation  matches the root on-chain
-        if (_root != s_root) {
+        if (!isKnownRoot(_root)) {
             revert Mixer__UnknownRoot(_root);
         }
         // check whether the nullifier has not yet been used...
